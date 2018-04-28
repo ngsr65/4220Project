@@ -63,7 +63,7 @@ static ssize_t device_write(struct file *filp, const char __user *buff, size_t l
 	return len;
 }
 //file structure 
-static struct file_oeprations fops = {
+static struct file_operations fops = {
 	.read = device_read,
 	.write = device_write,
 }

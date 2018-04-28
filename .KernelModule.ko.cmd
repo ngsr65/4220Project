@@ -1,0 +1,1 @@
+cmd_/nfs-home/arywd5/Desktop/4220Project/KernelModule.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /nfs-home/arywd5/Desktop/4220Project/KernelModule.ko /nfs-home/arywd5/Desktop/4220Project/KernelModule.o /nfs-home/arywd5/Desktop/4220Project/KernelModule.mod.o ;  true

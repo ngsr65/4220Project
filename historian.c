@@ -90,7 +90,7 @@ int main(){
 						break;
 				}
 
-				printf("\nTelling RTU #%d to turn the %s.", rtu, commands[command]);
+				printf("\nTelling RTU #%d to turn the %s.", rtu, commands[command - 1]);
 
 				buff[0] = '#';
 				buff[1] = (rtu - 48);	//Single digit int to char conversion

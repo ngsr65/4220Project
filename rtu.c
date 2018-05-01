@@ -1,5 +1,27 @@
+/*Historian to RTU Command reference
+	Format
+	#[ID][COMMAND]
+
+	ID is ID of RTU. Single int between 0 and 9
+	COMMAND is the command to execute. Single int between 0 and 9
+
+	COMMAND table
+	0 - Turn off Red LED
+	1 - Turn on Red LED
+	2 - Turn off Yellow LED
+	3 - Turn on Yellow LED
+	4 - Turn off Green LED
+	5 - TUrn on Green LED
+	5-9 - Reserved
+
+	Example
+	#11
+	Tells RTU with ID 1 to turn on it's Red LED
+*/
+
 //Included Libraries
 #include <wiringPi.h>
+#include <wiringPiSPI.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdint.h>
@@ -10,7 +32,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb,h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
@@ -18,6 +40,7 @@
 //Definitions
 #define REDLED 	  2
 #define YELLOWLED 3
+#define GREENLED  4
 #define SW1 	  12
 #define SW2 	  13
 #define PB4 	  19
@@ -29,87 +52,38 @@
 #define SegC      26
 #define SegD      27
 #define MSG_SIZE 40
-
+#define PORT 4000
 
 //Function Prototypes
 void segmentDisplay(int number);
-uint16_t readADC();
+float getADC();
 void setLED(int number, int onoff);
 int getPinStatus(int number);
-void checkSignal(int currentreading, int currentreadingindex, int* pastreadings);
+void checkSignal(float currentreading, int currentreadingindex, float* pastreadings);
 void setup();
 void *thread1(void *ptr);
-
+void event();
 
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
-int sock;
+int sock, myID;
 
-int nopowerflag = 0;
+int nopowerflag = 0, outofboundsflag = 0;
 
 
 
 int main(){
 	
 	//Variables
-	int i, b, var, otherRTU = -1, myID;
-	int pastreadings[10] = {0}, signalindex = 0; //For checking signal is active
-	int currentreading;
-	char timespec start, current;
+	int i, b, var, otherRTU = -1;
+	int signalindex = 0; //For checking signal is active
+	float pastreadings[10] = {0}, currentreading;
+	struct timespec start, current;
 	char msg[MSG_SIZE];
 	
 	//Run setup operations
 	setup();
-
-	//Create the socket
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-		printf("\nError creating socket...\n");
-		return -1;
-	}
-
-	//Initalize server struct
-	bzero(&server, sizeof(server);
-	server.sin_family = AF_INET);
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(atoi(argv[1]));
-
-	//Bind Socket 
-	if(bind(sock, (const struct sockaddr *)&server, sizeof(server)) < 0){
-		printf("\nError binding socket..");
-		return -1;
-	}
-
-	//Set socket to Broadcast
-	var = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &b, sizeof(b));
-	if(var < 0){
-		printf("\nError in setsockopt()");
-		return -1;
-	}
-	length = sizeof(struct sockaddr_in);
-
-	//Broadcast message to find any other RTU's
-	msg = "WHOIS";
-	inet_aton("128.206.19.255", &me.sin_addr);
-	var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
-	
-	clock_gettime(CLOCK_MONOTONIC, &start)
-	while(1){
-		clock_gettime(CLOCK_MONOTINIC, &current);
-		memset(msg, '\0', MSG_SIZE);
-		if((current.tv_sec - start.tv_sec) <= 1){
-			var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
-			otherRTU++;
-		} else {
-			break;
-		}
-	}	
-	myID = otherRTU + 1;
-
-	//call thread 1 to constantly check for messages from other RTU's
-	pthread_t t1;
-	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);
-
 
 	//Main program loop
 	while (1){
@@ -125,16 +99,21 @@ int main(){
 		}
 
 		//Check the signal
-		checkSignal(currentreading, signalindex, &pastreadings);
+		checkSignal(currentreading, signalindex, pastreadings);
 	}	
-	
-	
 	
 }
 
+void event(){
 
+}
 
 void setup(){
+	//Variables
+	struct timespec start, current;
+	char msg[MSG_SIZE];
+	int b, var, otherRTU;
+
 	//Initialize Wiring Pi and the SPI Bus
         wiringPiSetupGpio();
         wiringPiSPISetup(0, 1000000);
@@ -147,9 +126,56 @@ void setup(){
         pinMode(SegB, OUTPUT);
         pinMode(SegC, OUTPUT);
         pinMode(SegD, OUTPUT);
+
+	//Get an ID
+
+	//Create the socket
+	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+		printf("\nError creating socket...\n");
+	}
+
+	//Initalize server struct
+	bzero(&server, sizeof(server));
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(PORT);
+
+	//Bind Socket 
+	if(bind(sock, (const struct sockaddr *)&server, sizeof(server)) < 0){
+		printf("\nError binding socket..");
+	}
+
+	//Set socket to Broadcast
+	var = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &b, sizeof(b));
+	if(var < 0){
+		printf("\nError in setsockopt()");
+	}
+	length = sizeof(struct sockaddr_in);
+
+	//Broadcast message to find any other RTU's
+	sprintf(msg, "WHOIS");
+	inet_aton("128.206.19.255", &me.sin_addr);
+	var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
+	
+	clock_gettime(CLOCK_MONOTONIC, &start);
+	while(1){
+		clock_gettime(CLOCK_MONOTONIC, &current);
+		memset(msg, '\0', MSG_SIZE);
+		if((current.tv_sec - start.tv_sec) <= 1){
+			var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+			otherRTU++;
+		} else {
+			break;
+		}
+	}	
+	myID = otherRTU + 1;
+
+	//call thread 1 to constantly check for messages from other RTU's
+	pthread_t t1;
+	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);
 }
 
-void checkSignal(int currentreading, currentreadingindex, pastreadings){
+void checkSignal(float currentreading, int currentreadingindex, float* pastreadings){
 	int i;
 
 	//Check for no power
@@ -163,12 +189,15 @@ void checkSignal(int currentreading, currentreadingindex, pastreadings){
         }
 
         //Check to see if an older signal is within 2% of new signal
-        if ((pastreadings[currentreadingindex] > 0.99 * (float)pastreadings[i]) && 
-	    (pastreadings[currentreadingindex] < 1.01 * (float)pastreadings[i])){
+        if (((pastreadings[currentreadingindex]) > 0.99 * (pastreadings[i])) && 
+	    ((pastreadings[currentreadingindex]) < 1.01 * (pastreadings[i]))){
                 nopowerflag = 1;
         }
 
 	//Check for out of bounds
+	if ((currentreading > 2.0) || (currentreading < 1.0)){
+		outofboundsflag = 1;
+	}
 }
 
 
@@ -181,7 +210,7 @@ int getPinStatus(int number){
 	return digitalRead(number);
 }
 
-uint16_t getADC(){
+float getADC(){
 
 	uint16_t received = 0;
 	uint8_t data[3] = {
@@ -202,7 +231,7 @@ uint16_t getADC(){
 	//000000XX XXXXXXXX
 	received = received | data[2];
 
-	return received;
+	return ((float)(received * 500) / 1023);
 }
 
 void segmentDisplay(int number){
@@ -253,22 +282,53 @@ void segmentDisplay(int number){
 
 void *thread1(void *ptr){
 	char message[MSG_SIZE];
-	int ID = *((int *)ptr);
+	int ID = *((int *)ptr), var;
 
 	while(1){
 		memset(message,'\0', 40);			
 		var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
 		printf("\nMessage Recieved: %s", message);
-	   //check if message was recieved properly 	
-		if(var < 0){					
+
+	   	//check if message was recieved properly 	
+		if (var < 0){					
 			printf("\nError Recieving Message..");
-			return -1;
-		}
-		//WHOIS recieved 
-		else if(strncmp(message, "WHOIS", 5) == 0){
-			sprintf("RTU #%d is active", ID);
-			inet_aton("128.206.19.255", &me.sin_addr);
-			var = sendto(sock, message, strlen(message), 0, (struct sockaddr *)&me, length);
+		} else {
+			//WHOIS received 
+			if (strncmp(message, "WHOIS", 5) == 0){
+				sprintf(message, "RTU #%d is active", ID);
+				inet_aton("128.206.19.255", &me.sin_addr);
+				var = sendto(sock, message, strlen(message), 0, (struct sockaddr *)&me, length);
+			}
+	
+			//Command received
+			if (strncmp(message, "#", 1) == 0){
+				//Sent to me
+				if (atoi(message[1]) == ID){	
+					switch(atoi(message[2])){
+						case 0:
+							setLED(REDLED, 0);
+							break;
+						case 1:
+							setLED(REDLED, 1);
+							break;
+						case 2:
+							setLED(YELLOWLED, 0);
+							break;
+						case 3: 
+							setLED(YELLOWLED, 1);
+							break;
+						case 4:
+							setLED(GREENLED, 0);
+							break;
+						case 5:
+							setLED(GREENLED, 1);
+							break;
+						case 6:
+							
+							break;
+					}
+				}
+			}
 		}
 	}
 	pthread_exit(0);

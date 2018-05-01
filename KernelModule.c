@@ -29,7 +29,7 @@ unsigned long *ptr;
 static int major;
 static char msg[MSG_SIZE];
 
-enum Event{ NONE, BTN4, BTN5, SW1, SW2, RL, YL};			//enum to specify event 
+enum Event{ NONE, BTN4, BTN5, SW1, SW2, RL, YL, GL};			//enum to specify event 
 enum Event now;
 
 //function that will write to the character device so the user space program can read it 
@@ -39,6 +39,9 @@ static ssize_t device_read(struct file *filp, char __user *buffer, size_t length
 
 	if(last != now){						//if an interrupt occured then 
 		ssize_t dummy = copy_to_user(buffer, msg, length);
+		if(dummy < 0){
+			printk("Error Copying to User Space in device_read\n");
+		}
 		last = now;	
 	}
 
@@ -66,44 +69,53 @@ static ssize_t device_write(struct file *filp, const char __user *buff, size_t l
 static struct file_operations fops = {
 	.read = device_read,
 	.write = device_write,
-}
+};
 //ISR function to check if any events happened 
 static irqreturn_t button_isr(int irq, void *dev_id){
 
 	disable_irq_nosync(79);						//disable before we begin 
 	unsigned long event;						//variable to hold our derefrenced GPEDS0 in 
-	event = *(ptr + 16) & 0x0018300C;
+	event = *(ptr + 16) & 0x0018301C;
 	now = NONE;
 
 	switch(event){							//enter switch statement to find out what kind of event occured
 		case 0x4:						//RED LED EVENT OCCURED
 			now = RL;
-			*msg = "5";
+			sprintf(msg, "5\n");
 			printk("Red Light Event Detected\n");
 			break;
 		case 0x8:						//YELLOW LED EVENT OCCURED
 			now = YL;
-			*msg = "6";
+			sprintf(msg, "6\n");
 			printk("Yellow Light Event Detected\n");
+			break;
+		case 0x10:						//GREEN LED EVENT DETECTED
+			now = GL;
+			sprintf(msg, "7\n");
+			printk("Green Light Event Detected\n");
 			break;
 		case 0x1000:						//SWITCH 1 EVENT OCCURED
 			now = SW1;
-			*msg = "3";
+			//*msg = "3";
+			sprintf(msg, "3\n");
 			printk("Switch 1 Event Detected\n");
 			break;
 		case 0x2000:						//SWITCH 2 EVENT OCCURED
 			now = SW2;
-			*msg = "4";
+			//*msg = "4";
+			sprintf(msg, "4\n");
 			printk("Switch 2 Event Detected\n");
 			break;
 		case 0x80000:						//BUTTON 4 EVENT OCCURED
 			now = BTN4;
-			*msg = "1";
+			//*msg = "1";
+			sprintf(msg, "1\n");
 			printk("Button 4 Event Detected\n");
 			break;
-		case: 0x100000:						//BUTTON 5 EVENT OCCURED 
+		case 0x100000:						//BUTTON 5 EVENT OCCURED 
 			now = BTN5;
-			*msg = "2";
+			//*msg = "2";
+			sprintf(msg, "2\n");
 			printk("Button 5 Event Detected\n");
 			break;
 		default:						//default case, no event occured 
@@ -144,7 +156,7 @@ int init_module(void){
 	*(ptr + 37) = *(ptr + 37) & (~0x155);				//set back to zero 
 	*(ptr + 38) = *(ptr + 38) & (~0x001f0000);
 
-	*(ptr + 31) = *(ptr + 31) | 0x0018300C;				//set rising edge detection for buttons, switches and LEDs 
+	*(ptr + 31) = *(ptr + 31) | 0x0018301C;				//set rising edge detection for buttons, switches and LEDs 
 	
 	dummy = request_irq(79, button_isr, IRQF_SHARED, "Event_handler", &mydev_id);
 
@@ -154,8 +166,8 @@ int init_module(void){
 //called when the kernel module is removed 
 void cleanup_nodule(void){
 
-	*(ptr + 31) = *(ptr + 31) & (~0x1f0000);			//clear rising edge detection for the buttons 
-	*(ptr + 16) = *(ptr + 16) | 0x0018300C;				//clear event detect register 
+	*(ptr + 31) = *(ptr + 31) & (~0x0018301c);			//clear rising edge detection for the buttons 
+	*(ptr + 16) = *(ptr + 16) | 0x0018301C;				//clear event detect register 
 
 	unregister_chrdev(major, CDEV_NAME);				//unregister the charcter device 
 	printk("Kernel Module Uninstalled\n");				//print message to user 

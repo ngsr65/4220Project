@@ -53,6 +53,8 @@
 #define SegD      27
 #define MSG_SIZE 40
 #define PORT 4000
+#define CHAR_DEV "/dev/buffer"
+
 
 //Function Prototypes
 void segmentDisplay(int number);
@@ -67,8 +69,7 @@ void event();
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
-int sock, myID;
-
+int sock, myID, cdev_id;
 int nopowerflag = 0, outofboundsflag = 0;
 
 
@@ -134,6 +135,10 @@ void setup(){
 		printf("\nError creating socket...\n");
 	}
 
+	//open character device 
+//	if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
+//		printf("\nCannot open device %s", CHAR_DEV);
+//	}
 	//Initalize server struct
 	bzero(&server, sizeof(server));
 	server.sin_family = AF_INET;
@@ -162,6 +167,7 @@ void setup(){
 		clock_gettime(CLOCK_MONOTONIC, &current);
 		memset(msg, '\0', MSG_SIZE);
 		if((current.tv_sec - start.tv_sec) <= 1){
+			printf("\nReading in from socket...");
 			var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
 			otherRTU++;
 		} else {
@@ -169,6 +175,8 @@ void setup(){
 		}
 	}	
 	myID = otherRTU + 1;
+	printf("\nMy ID number is %d", myID);
+	
 
 	//call thread 1 to constantly check for messages from other RTU's
 	pthread_t t1;
@@ -303,8 +311,8 @@ void *thread1(void *ptr){
 			//Command received
 			if (strncmp(message, "#", 1) == 0){
 				//Sent to me
-				if (atoi(message[1]) == ID){	
-					switch(atoi(message[2])){
+				if (atoi(&(message[1])) == ID){	
+					switch(atoi(&(message[2]))){
 						case 0:
 							setLED(REDLED, 0);
 							break;

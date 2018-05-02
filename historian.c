@@ -23,11 +23,13 @@
 //Function Prototypes
 void setup();
 void sendmessage(char*);
+void *receivethread(void *ptr);
+
 
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
-int sock;
+int sock, connections = 0;
 char msg[MSG_SIZE];
 
 char *commands[] = {"red LED on", "red LED off", "yellow LED on", "yellow LED off", "blue LED on", "blue LED off"};
@@ -39,9 +41,13 @@ int main(){
 	//Variables
 	char buff[40];	
 	int option = 0, i, running = 1, rtu, command;
-
+	pthread_t t1;
+	
 	//Run setup function
 	setup();
+
+	//Create a thread for receiving information and sending IDs to new RTUs
+	pthread_create(&t1, NULL, (void *)thread1, (void *)&i);
 
 	while(running == 1){
 
@@ -147,3 +153,24 @@ void setup(){
         }
         length = sizeof(struct sockaddr_in);
 }
+
+void *receivethread(void *ptr){
+	int var;
+	char message[MSG_SIZE];
+
+	while (1){
+		var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+
+		//	
+
+	}
+
+}
+
+
+
+
+
+
+
+

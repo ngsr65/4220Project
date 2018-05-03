@@ -160,8 +160,13 @@ void *receivethread(void *ptr){
 
 	while (1){
 		var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
-
-		//	
+		
+		if (strncmp(message, "WHOIS", 5) == 0){
+			memset(message, '\0', MSG_SIZE);
+			sprintf(message, "~%d", connections++);
+			var = sendto(sock, message, strlen(message), 0, (struct sockaddr *)&me, length);
+		}
+		
 
 	}
 

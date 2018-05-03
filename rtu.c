@@ -36,6 +36,10 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <fcntl.h>
+#include <time.h>
+#include <sys/timerfd.h>
+#include <sched.h>
+
 
 //Definitions
 #define REDLED 	  2
@@ -64,15 +68,25 @@ int getPinStatus(int number);
 void checkSignal(float currentreading, int currentreadingindex, float* pastreadings);
 void setup();
 void *thread1(void *ptr);
-void event();
+void *eventthread(void *ptr);
+void event(int type);
+
+//Event enum
+enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5};
+
+//Event struct
+struct eventvar{
+	int rtuID, eventtype, led1, led2, led3, sw1, sw2, pb4, pb5;
+	float voltage;
+	struct timespec timestamp;
+	struct eventvar *nextevent;
+}typedef Event;
 
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
 int sock, myID, cdev_id;
-int nopowerflag = 0, outofboundsflag = 0;
-
-
+Event* Head;
 
 int main(){
 	
@@ -105,13 +119,16 @@ int main(){
 	
 }
 
-void event(){
+void event(int type){
+	Event* newevent;
 
+	newevent = (Event*)malloc(sizeof(Event));
+
+	newevent. = type;
 }
 
 void setup(){
 	//Variables
-	struct timespec start, current;
 	char msg[MSG_SIZE];
 	int b, var, otherRTU;
 
@@ -162,19 +179,16 @@ void setup(){
 	inet_aton("128.206.19.255", &me.sin_addr);
 	var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
 	
-	clock_gettime(CLOCK_MONOTONIC, &start);
 	while(1){
-		clock_gettime(CLOCK_MONOTONIC, &current);
+
 		memset(msg, '\0', MSG_SIZE);
-		if((current.tv_sec - start.tv_sec) <= 1){
-			printf("\nReading in from socket...");
-			var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
-			otherRTU++;
-		} else {
+		var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+		if (msg[0] = '~'){
+			myID = msg[1] - 48;
 			break;
 		}
 	}	
-	myID = otherRTU + 1;
+
 	printf("\nMy ID number is %d", myID);
 	
 
@@ -187,7 +201,6 @@ void checkSignal(float currentreading, int currentreadingindex, float* pastreadi
 	int i;
 
 	//Check for no power
-
 	//Make sure the compare value is 5 readings away
         i = currentreadingindex;
         if (i < 5){
@@ -199,12 +212,16 @@ void checkSignal(float currentreading, int currentreadingindex, float* pastreadi
         //Check to see if an older signal is within 2% of new signal
         if (((pastreadings[currentreadingindex]) > 0.99 * (pastreadings[i])) && 
 	    ((pastreadings[currentreadingindex]) < 1.01 * (pastreadings[i]))){
-                nopowerflag = 1;
+                event(sigoff);
         }
 
 	//Check for out of bounds
-	if ((currentreading > 2.0) || (currentreading < 1.0)){
-		outofboundsflag = 1;
+	if (currentreading > 2.0){
+		event(sighigh);
+	}
+
+	if (currentreading < 1.0){
+		event(siglow);
 	}
 }
 
@@ -212,6 +229,15 @@ void checkSignal(float currentreading, int currentreadingindex, float* pastreadi
 
 void setLED(int number, int onoff){
 	digitalWrite(number, onoff);
+	if (number == 2){
+		event(led1);
+	}
+	if (number == 3){
+		event(led2);
+	}
+	if (number == 4){
+		event(led3);
+	}
 }
 
 int getPinStatus(int number){
@@ -239,7 +265,7 @@ float getADC(){
 	//000000XX XXXXXXXX
 	received = received | data[2];
 
-	return ((float)(received * 500) / 1023);
+	return ((float)(received * 3.3) / 1023);
 }
 
 void segmentDisplay(int number){
@@ -341,3 +367,33 @@ void *thread1(void *ptr){
 	}
 	pthread_exit(0);
 }
+
+void *eventthread(void *ptr){
+
+	struct sched_param param;
+	struct itimerspec timer_value;
+	int timer = timerfd_create(CLOCK_MONOTONIC, 0);
+	uint64_t periods = 0;
+
+	param.sched_priority = 55;
+	sched_setscheduler(0, SCHED_FIFO, &param);
+
+	timer_value.it_interval.tv_sec = 1;
+	timer_value.it_interval.tv_nsec = 0;
+	timer_value.it_value.tv_sec = 0;
+	timer_value.it_value.tv_nsec = 100;
+
+	timerfd_settime(timer, 0, &timer_value, NULL);
+	read(timer, &periods, sizeof(periods));
+
+	while(1){
+		
+		
+		read(timer, &periods, sizeof(periods);
+		
+	}
+	
+	pthread_exit(0);
+}
+
+

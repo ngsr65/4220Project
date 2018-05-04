@@ -165,23 +165,25 @@ void setup(){
         pinMode(SegC, OUTPUT);
         pinMode(SegD, OUTPUT);
 
+	//open character device 
+        if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
+                printf("\nCannot open device %s", CHAR_DEV);
+        }
+
 	//Create the socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		printf("\nError creating socket...\n");
 	}
 
-	//open character device 
-	if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
-		printf("\nCannot open device %s", CHAR_DEV);
-	}
 	//Initalize server struct
-	bzero(&server, sizeof(server));
-	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(PORT);
+	bzero(&me, sizeof(me));
+	me.sin_family = AF_INET;
+	me.sin_addr.s_addr = INADDR_ANY;
+	me.sin_port = htons(PORT);
+	inet_aton("128.206.19.255", &me.sin_addr);	
 
 	//Bind Socket 
-	if(bind(sock, (const struct sockaddr *)&server, sizeof(server)) < 0){
+	if(bind(sock, (const struct sockaddr *)&me, sizeof(me)) < 0){
 		printf("\nError binding socket..");
 	}
 
@@ -193,17 +195,17 @@ void setup(){
 	length = sizeof(struct sockaddr_in);
 
 	//Broadcast message to find any other RTU's
+	memset(msg, '\0', MSG_SIZE);
 	sprintf(msg, "WHOIS");
-	inet_aton("128.206.19.255", &me.sin_addr);
 	var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
+	printf("\nSent the WHOIS\n");
 	
 	while(1){
-		msg[0] = '~';
-		msg[1] = '0';
-	//	memset(msg, '\0', MSG_SIZE);
-	//	var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
-		if (msg[0] = '~'){
-			myID = msg[1] - 48;
+		memset(msg, '\0', MSG_SIZE);
+		var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+		printf("Message: %s\n", msg);			//Deleteme
+		if (msg[0] == '~'){
+			myID = msg[1] - '0';
 			break;
 		}
 	}	
@@ -213,9 +215,8 @@ void setup(){
 
 	//call thread 1 to constantly check for messages from other RTU's
 //	pthread_t t1, cdev_thread;
-	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);
 	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
-	
+	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);	
 }
 
 void checkSignal(float currentreading, int currentreadingindex, float* pastreadings){
@@ -352,32 +353,31 @@ void *thread1(void *ptr){
 			//WHOIS received 
 			if (strncmp(message, "WHOIS", 5) == 0){
 				sprintf(message, "RTU #%d is active", ID);
-				inet_aton("128.206.19.255", &me.sin_addr);
 				var = sendto(sock, message, strlen(message), 0, (struct sockaddr *)&me, length);
 			}
 	
 			//Command received
 			if (strncmp(message, "#", 1) == 0){
 				//Sent to me
-				if (atoi(&(message[1])) == ID){	
-					switch(atoi(&(message[2]))){
+				if ((message[1] - '0') == ID){	
+					switch(message[2] - '0'){
 						case 0:
-							setLED(REDLED, 0);
-							break;
-						case 1:
 							setLED(REDLED, 1);
 							break;
-						case 2:
-							setLED(YELLOWLED, 0);
+						case 1:
+							setLED(REDLED, 0);
 							break;
-						case 3: 
+						case 2:
 							setLED(YELLOWLED, 1);
 							break;
+						case 3: 
+							setLED(YELLOWLED, 0);
+							break;
 						case 4:
-							setLED(GREENLED, 0);
+							setLED(GREENLED, 1);
 							break;
 						case 5:
-							setLED(GREENLED, 1);
+							setLED(GREENLED, 0);
 							break;
 						case 6:
 							
@@ -419,6 +419,7 @@ void *eventthread(void *ptr){
 	
 	pthread_exit(0);
 }
+
 //fucntion that will read in events from the character device and greate an event 
 void *readKM(void *ptr){
 	

@@ -25,7 +25,6 @@ void setup();
 void sendmessage(char*);
 void *receivethread(void *ptr);
 
-
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
@@ -47,7 +46,7 @@ int main(){
 	setup();
 
 	//Create a thread for receiving information and sending IDs to new RTUs
-	pthread_create(&t1, NULL, (void *)thread1, (void *)&i);
+	pthread_create(&t1, NULL, (void *)receivethread, (void *)&i);
 
 	while(running == 1){
 

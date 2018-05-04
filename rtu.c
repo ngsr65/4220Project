@@ -59,25 +59,13 @@
 #define PORT 4000
 #define CHAR_DEV "/dev/buffer"
 
-
-//Function Prototypes
-void segmentDisplay(int number);
-float getADC();
-void setLED(int number, int onoff);
-int getPinStatus(int number);
-void checkSignal(float currentreading, int currentreadingindex, float* pastreadings);
-void setup();
-void *readKM(void * ptr);		
-void *thread1(void *ptr);
-void *eventthread(void *ptr);
-void event(int type);
-
 //Event enum
 enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5};
 
 //Event struct
 struct eventvar{
-	int rtuID, eventtype, led1, led2, led3, sw1, sw2, pb4, pb5;
+	int rtuID, led1, led2, led3, sw1, sw2, pb4, pb5;
+	enum eventtypes type;
 	float voltage;
 	struct timespec timestamp;
 	struct eventvar *nextevent;
@@ -90,6 +78,19 @@ int sock, myID, cdev_id;
 Event* Head;
 pthread_t t1, cdev_thread;
 
+//Function Prototypes 
+void segementDisplay(int number);
+float getADC();
+void setLED(int number, int onoff);
+int getPinStatus(int number);
+void checkSignal(float currentreading, int currentreadingindex, float *pastreadings);
+void setup();
+void *readKM(void *ptr);
+void *thread1(void *ptr);
+void *eventthread(void *ptr);
+void event(enum eventtypes t);
+void add_node(Event *add);
+void free_list(Event *node);
 
 int main(){
 	
@@ -102,7 +103,7 @@ int main(){
 	
 	//Run setup operations
 	setup();
-
+	
 	//Main program loop
 	while (1){
 
@@ -125,12 +126,25 @@ int main(){
 
 }
 
-void event(int type){
+void event(enum eventtypes t){
 	Event* newevent;
-
 	newevent = (Event*)malloc(sizeof(Event));
 
-//	newevent. = type;
+	newevent->rtuID = myID; 
+	newevent->type = t;
+	newevent->led1 = getPinStatus(REDLED);
+	newevent->led2 = getPinStatus(YELLOWLED);
+	newevent->led3 = getPinStatus(GREENLED);
+	newevent->sw1 = getPinStatus(SW1);
+	newevent->sw2 = getPinStatus(SW2);
+	newevent->pb4 = getPinStatus(PB4);
+	newevent->pb5 = getPinStatus(PB5);
+	newevent->nextevent = NULL;
+	clock_gettime(CLOCK_MONOTONIC, &(newevent->timestamp));
+
+	//Add new event to the linked list 
+//	add_node(newevent);
+
 }
 
 void setup(){
@@ -235,6 +249,7 @@ void checkSignal(float currentreading, int currentreadingindex, float* pastreadi
 
 
 void setLED(int number, int onoff){
+
 	digitalWrite(number, onoff);
 	if (number == 2){
 		event(led1);
@@ -331,7 +346,7 @@ void *thread1(void *ptr){
 		printf("\nMessage Recieved: %s", message);
 
 	   	//check if message was recieved properly 	
-		if (var < 0){					
+;		if (var < 0){					
 			printf("\nError Recieving Message..");
 		} else {
 			//WHOIS received 
@@ -395,7 +410,9 @@ void *eventthread(void *ptr){
 
 	while(1){
 		
-		
+			
+
+	
 		read(timer, &periods, sizeof(periods));
 		
 	}
@@ -407,6 +424,7 @@ void *readKM(void *ptr){
 	
 	char readin[MSG_SIZE], prev;
 	int dummy;
+	enum eventtypes x;
 
 	while(1){
 		memset(readin, '\0', MSG_SIZE);
@@ -420,18 +438,26 @@ void *readKM(void *ptr){
 			//button 4 event detected 
 			case '1':
 				printf("\nButton four event detected");
+				x = pb4;
+				event(x);
 				break;
 			//button 5 event detected 
 			case '2':
 				printf("\nButton 5 event detected");
+				x = pb5;
+				event(x);
 				break;
 			//switch 1 event detected 
 			case '3':
 				printf("\nSwitch 1 event detected");
+				x = sw1;
+				event(x);
 				break;
 			//switch 2 event detected 
 			case '4':
 				printf("\nSwitch 2 event detected");
+				x = sw2;
+				event(x);
 				break;
 			case '\0':
 				//ignore this case 
@@ -444,4 +470,41 @@ void *readKM(void *ptr){
 
 	pthread_exit(0);
 }
+//This function will add an event to the end of our linked list 
+void add_node(Event *add){
+	//create pointer to the head 
+	Event *ptr = Head;
+	
+	//while loop to find the end of the linked list 
+	while(ptr->nextevent != NULL){
+		ptr = ptr->nextevent;
+	}
 
+	//when loop breaks we want to add the new node 
+	ptr->nextevent = add;
+}
+//function to call when we want to free the list 
+void free_list(Event *node){
+	
+	//Base Case 
+	if(node->nextevent == NULL){
+		free(node);	
+	}
+
+	else{
+		free_list(node->nextevent);
+		free(node);
+	}		
+}
+
+void print_list(Event *node){
+	Event *ptr = node;
+
+	while(node != NULL){
+		printf("\nEvent #%d on RTU #%d at time %ld.%ld", node->type, node->rtuID, node->timestamp.tv_sec, node->timestamp.tv_nsec);
+		printf("Pin Status:\nRED LED: %d\nYELLOW LED: %d\nGREEN LED: %d\nSWITCH 1:%d\n", node->led1, node->led2, node->led3, node->sw1);
+		printf("SWITCH 2: %d\nPB4: %d\nPB5: %d\n", node->sw2, node->pb4, node->pb5);
+		ptr = ptr->nextevent;
+	}
+
+}

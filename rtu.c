@@ -88,6 +88,8 @@ struct sockaddr_in me, server;
 socklen_t length;
 int sock, myID, cdev_id;
 Event* Head;
+pthread_t t1, cdev_thread;
+
 
 int main(){
 	
@@ -103,21 +105,25 @@ int main(){
 
 	//Main program loop
 	while (1){
-
-		currentreading = getADC();
+		sleep(5);
+		printf("looping...");
+//		currentreading = getADC();
 
 		//Load current signal value into signalcheck array
-		pastreadings[signalindex] = currentreading;
-		if (signalindex == 9){
-			signalindex = 0;
-		} else {
-			signalindex++;
-		}
+//		pastreadings[signalindex] = currentreading;
+//		if (signalindex == 9){
+//			signalindex = 0;
+//		} else {
+//			signalindex++;
+//		}
 
 		//Check the signal
-		checkSignal(currentreading, signalindex, pastreadings);
+//		checkSignal(currentreading, signalindex, pastreadings);
 	}	
 	
+	pthread_join(t1, NULL);
+	pthread_join(cdev_thread, NULL);
+
 }
 
 void event(int type){
@@ -125,7 +131,7 @@ void event(int type){
 
 	newevent = (Event*)malloc(sizeof(Event));
 
-	newevent. = type;
+//	newevent. = type;
 }
 
 void setup(){
@@ -145,8 +151,6 @@ void setup(){
         pinMode(SegB, OUTPUT);
         pinMode(SegC, OUTPUT);
         pinMode(SegD, OUTPUT);
-
-	//Get an ID
 
 	//Create the socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
@@ -181,9 +185,10 @@ void setup(){
 	var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
 	
 	while(1){
-
-		memset(msg, '\0', MSG_SIZE);
-		var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+		msg[0] = '~';
+		msg[1] = '0';
+	//	memset(msg, '\0', MSG_SIZE);
+	//	var = recvfrom(sock, msg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
 		if (msg[0] = '~'){
 			myID = msg[1] - 48;
 			break;
@@ -194,8 +199,10 @@ void setup(){
 	
 
 	//call thread 1 to constantly check for messages from other RTU's
-	pthread_t t1;
+//	pthread_t t1, cdev_thread;
 	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);
+	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
+	
 }
 
 void checkSignal(float currentreading, int currentreadingindex, float* pastreadings){
@@ -318,7 +325,7 @@ void segmentDisplay(int number){
 void *thread1(void *ptr){
 	char message[MSG_SIZE];
 	int ID = *((int *)ptr), var;
-
+	
 	while(1){
 		memset(message,'\0', 40);			
 		var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
@@ -398,7 +405,8 @@ void *eventthread(void *ptr){
 }
 //fucntion that will read in events from the character device and greate an event 
 void *readKM(void *ptr){
-	
+
+	printf("\nReading in from the Kernel Module using character device...");	
 	char readin[MSG_SIZE];
 	int dummy;
 

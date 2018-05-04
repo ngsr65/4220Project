@@ -40,7 +40,7 @@ static ssize_t device_read(struct file *filp, char __user *buffer, size_t length
 			printk("Error Copying to User Space in device_read\n");
 		}
 
-		memset(buffer, '\0', MSG_SIZE);
+	//	memset(buffer, '\0', MSG_SIZE);
 	return length;
 
 }

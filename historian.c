@@ -171,11 +171,3 @@ void *receivethread(void *ptr){
 	}
 
 }
-
-
-
-
-
-
-
-

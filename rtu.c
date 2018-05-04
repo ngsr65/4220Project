@@ -67,6 +67,7 @@ void setLED(int number, int onoff);
 int getPinStatus(int number);
 void checkSignal(float currentreading, int currentreadingindex, float* pastreadings);
 void setup();
+void *readKM(void * ptr);		
 void *thread1(void *ptr);
 void *eventthread(void *ptr);
 void event(int type);
@@ -153,9 +154,9 @@ void setup(){
 	}
 
 	//open character device 
-//	if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
-//		printf("\nCannot open device %s", CHAR_DEV);
-//	}
+	if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
+		printf("\nCannot open device %s", CHAR_DEV);
+	}
 	//Initalize server struct
 	bzero(&server, sizeof(server));
 	server.sin_family = AF_INET;
@@ -389,11 +390,49 @@ void *eventthread(void *ptr){
 	while(1){
 		
 		
-		read(timer, &periods, sizeof(periods);
+		read(timer, &periods, sizeof(periods));
 		
 	}
 	
 	pthread_exit(0);
 }
+//fucntion that will read in events from the character device and greate an event 
+void *readKM(void *ptr){
+	
+	char readin[MSG_SIZE];
+	int dummy;
 
+	while(1){
+		memset(readin, '\0', MSG_SIZE);
+		//read in from character device 
+		dummy = read(cdev_id, readin, sizeof(readin));	
+		//check message was recieved properly 
+		if(dummy != sizeof(readin)){
+			printf("\nReading in From character Device Failed...");
+		}
+		switch(readin[0]){
+			//button 4 event detected 
+			case '1':
+				printf("\nButton four event detected");
+				break;
+			//button 5 event detected 
+			case '2':
+				printf("\nButton 5 event detected");
+				break;
+			//switch 1 event detected 
+			case '3':
+				printf("\nSwitch 1 event detected");
+				break;
+			//switch 2 event detected 
+			case '4':
+				printf("\nSwitch 2 event detected");
+				break;
+			default:
+
+				break;
+		}
+	}
+
+	pthread_exit(0);
+}
 

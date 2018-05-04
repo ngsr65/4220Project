@@ -35,12 +35,12 @@ enum Event now;
 //function that will write to the character device so the user space program can read it 
 static ssize_t device_read(struct file *filp, char __user *buffer, size_t length, loff_t *offset){
  
-		ssize_t dummy = copy_to_user(buffer, msg, length);
-		if(dummy < 0){
-			printk("Error Copying to User Space in device_read\n");
-		}
+	ssize_t dummy = copy_to_user(buffer, msg, length);
+	if(dummy < 0){
+		printk("Error Copying to User Space in device_read\n");
+	}
 
-	//	memset(buffer, '\0', MSG_SIZE);
+	sprintf(msg, "0\n");
 	return length;
 
 }
@@ -110,8 +110,8 @@ static irqreturn_t button_isr(int irq, void *dev_id){
 			sprintf(msg, "2\n");
 			printk("Button 5 Event Detected\n");
 			break;
-		default:										//default case, no event occured 
-			now = NONE;
+		default:									//default case, no event occured 
+			memset(msg, '\0', MSG_SIZE);
 			break;
 	}
 

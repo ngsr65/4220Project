@@ -105,20 +105,19 @@ int main(){
 
 	//Main program loop
 	while (1){
-		sleep(5);
-		printf("looping...");
-//		currentreading = getADC();
+
+		currentreading = getADC();
 
 		//Load current signal value into signalcheck array
-//		pastreadings[signalindex] = currentreading;
-//		if (signalindex == 9){
-//			signalindex = 0;
-//		} else {
-//			signalindex++;
-//		}
+		pastreadings[signalindex] = currentreading;
+		if (signalindex == 9){
+			signalindex = 0;
+		} else {
+			signalindex++;
+		}
 
 		//Check the signal
-//		checkSignal(currentreading, signalindex, pastreadings);
+		checkSignal(currentreading, signalindex, pastreadings);
 	}	
 	
 	pthread_join(t1, NULL);
@@ -405,9 +404,8 @@ void *eventthread(void *ptr){
 }
 //fucntion that will read in events from the character device and greate an event 
 void *readKM(void *ptr){
-
-	printf("\nReading in from the Kernel Module using character device...");	
-	char readin[MSG_SIZE];
+	
+	char readin[MSG_SIZE], prev;
 	int dummy;
 
 	while(1){
@@ -435,8 +433,11 @@ void *readKM(void *ptr){
 			case '4':
 				printf("\nSwitch 2 event detected");
 				break;
+			case '\0':
+				//ignore this case 
+				break;
 			default:
-
+			//	printf("\nDefault case...");
 				break;
 		}
 	}

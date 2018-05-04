@@ -60,7 +60,7 @@
 #define CHAR_DEV "/dev/buffer"
 
 //Event enum
-enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5};
+enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5, START};
 
 //Event struct
 struct eventvar{
@@ -128,7 +128,12 @@ int main(){
 
 void event(enum eventtypes t){
 	Event* newevent;
-	newevent = (Event*)malloc(sizeof(Event));
+
+	if (Head->type == START){
+		newevent = Head;
+	} else {
+		newevent = (Event*)malloc(sizeof(Event));
+	}
 
 	newevent->rtuID = myID; 
 	newevent->type = t;
@@ -151,6 +156,8 @@ void setup(){
 	//Variables
 	char msg[MSG_SIZE];
 	int b, var, otherRTU;
+	Head = (Event *)malloc(sizeof(Event));
+	Head->type = START;
 
 	//Initialize Wiring Pi and the SPI Bus
         wiringPiSetupGpio();

@@ -76,7 +76,7 @@ struct sockaddr_in me, server;
 socklen_t length;
 int sock, myID, cdev_id;
 Event* Head;
-pthread_t t1, cdev_thread;
+pthread_t t1, cdev_thread, et;
 
 //Function Prototypes 
 void segementDisplay(int number);
@@ -91,6 +91,7 @@ void *eventthread(void *ptr);
 void event(enum eventtypes t);
 void add_node(Event *add);
 void free_list(Event *node);
+void print_list(Event *node);
 
 int main(){
 	
@@ -123,6 +124,7 @@ int main(){
 	
 	pthread_join(t1, NULL);
 	pthread_join(cdev_thread, NULL);
+	pthread_join(et, NULL);
 
 }
 
@@ -148,8 +150,9 @@ void event(enum eventtypes t){
 	clock_gettime(CLOCK_MONOTONIC, &(newevent->timestamp));
 
 	//Add new event to the linked list 
-//	add_node(newevent);
-
+	add_node(newevent);
+	printf("\nNode Added to list...");
+//	print_list(Head);
 }
 
 void setup(){
@@ -218,12 +221,12 @@ void setup(){
 	}	
 
 	printf("\nMy ID number is %d", myID);
-	
 
 	//call thread 1 to constantly check for messages from other RTU's
 //	pthread_t t1, cdev_thread;
 	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
 	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);	
+//	pthread_create(&et, NULL, (void *)eventthread, (void *)&myID);
 }
 
 void checkSignal(float currentreading, int currentreadingindex, float* pastreadings){
@@ -417,8 +420,9 @@ void *eventthread(void *ptr){
 
 	while(1){
 		
-			
-
+	//	print_list(Head);	
+//		free_list(Head->nextevent);
+	//	Head->type = START;
 	
 		read(timer, &periods, sizeof(periods));
 		
@@ -433,6 +437,7 @@ void *readKM(void *ptr){
 	char readin[MSG_SIZE], prev;
 	int dummy;
 	enum eventtypes x;
+	printf("\nReading in from KErnel Module...");
 
 	while(1){
 		memset(readin, '\0', MSG_SIZE);
@@ -446,26 +451,22 @@ void *readKM(void *ptr){
 			//button 4 event detected 
 			case '1':
 				printf("\nButton four event detected");
-				x = pb4;
-				event(x);
+				event(pb4);
 				break;
 			//button 5 event detected 
 			case '2':
 				printf("\nButton 5 event detected");
-				x = pb5;
-				event(x);
+				event(pb5);
 				break;
 			//switch 1 event detected 
 			case '3':
 				printf("\nSwitch 1 event detected");
-				x = sw1;
-				event(x);
+				event(sw1);
 				break;
 			//switch 2 event detected 
 			case '4':
 				printf("\nSwitch 2 event detected");
-				x = sw2;
-				event(x);
+				event(sw2);
 				break;
 			case '\0':
 				//ignore this case 
@@ -490,6 +491,7 @@ void add_node(Event *add){
 
 	//when loop breaks we want to add the new node 
 	ptr->nextevent = add;
+	add->nextevent = NULL;
 }
 //function to call when we want to free the list 
 void free_list(Event *node){

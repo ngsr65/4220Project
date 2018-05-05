@@ -19,18 +19,32 @@
 #define MSG_SIZE 40
 #define PORT 4000
 
+//Event enum
+enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5, START};
+
+//Event struct
+struct eventvar{
+	int rtuID, led1, led2, led3, sw1, sw2, pb4, pb5;
+	enum eventtypes type;
+	float voltage;
+	struct timespec timestamp;
+	struct eventvar *nextevent;
+}typedef Event;
+
 //Global Variables
 struct sockaddr_in me;
 socklen_t length;
 int sock, connections = 0;
 char msg[MSG_SIZE];
 char *commands[] = {"red LED on", "red LED off", "yellow LED on", "yellow LED off", "green LED on", "green LED off"};
+Event *head;
 
 //Function Prototypes
 void setup();
 void sendmessage(char*);
 void *receivethread(void *ptr);
-
+void add_node(Event *add);
+void free_list(Event *node);
 
 
 int main(){
@@ -39,7 +53,7 @@ int main(){
 	char buff[40];	
 	int option = 0, i, running = 1, rtu, command;
 	pthread_t t1;
-	
+
 	//Run setup function
 	setup();
 
@@ -63,9 +77,9 @@ int main(){
 				printf("\nTurn on red LED - 1");
 				printf("\nTurn off red LED - 2");
 				printf("\nTurn on yellow LED - 3");
-                                printf("\nTurn off yellow LED - 4");
+				printf("\nTurn off yellow LED - 4");
 				printf("\nTurn on green LED - 5");
-                                printf("\nTurn off green LED - 6");
+				printf("\nTurn off green LED - 6");
 				printf("\nPlease enter the command: ");
 				scanf("%d", &command);
 
@@ -77,17 +91,17 @@ int main(){
 						buff[2] = '1';
 						break;
 					case 3:
-                                                buff[2] = '2';
-                                                break;
-                                        case 4:
-                                                buff[2] = '3';
-                                                break;
+						buff[2] = '2';
+						break;
+					case 4:
+						buff[2] = '3';
+						break;
 					case 5:
-                                                buff[2] = '4';
-                                                break;
-                                        case 6:
-                                                buff[2] = '5';
-                                                break;
+						buff[2] = '4';
+						break;
+					case 6:
+						buff[2] = '5';
+						break;
 					default: 
 						printf("Error, invalid command");
 						break;
@@ -101,14 +115,14 @@ int main(){
 				//Send the command
 				sendmessage(buff);
 
-				
+
 				break;
 			default:
 				printf("\nError, invalid option!");
 		}
 
 	}
-	
+
 
 
 
@@ -118,13 +132,13 @@ int main(){
 
 void sendmessage(char* msg){
 	int a;
-	
+
 	//a = write(sock, msg, MSG_SIZE);
 	a = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
 }
 
 void setup(){
-	
+
 	int var, b = 1;
 
 	//Create a socket
@@ -134,22 +148,22 @@ void setup(){
 
 	//Initalize server struct
 	bzero(&me, sizeof(me));
-        me.sin_family = AF_INET;
-        me.sin_addr.s_addr = INADDR_ANY;
-        me.sin_port = htons(PORT);
+	me.sin_family = AF_INET;
+	me.sin_addr.s_addr = INADDR_ANY;
+	me.sin_port = htons(PORT);
 	inet_aton("128.206.19.255", &me.sin_addr);
 
 	//Bind Socket 
-        if(bind(sock, (const struct sockaddr *)&me, sizeof(me)) < 0){
-                printf("\nError binding socket..");
-        }
+	if(bind(sock, (const struct sockaddr *)&me, sizeof(me)) < 0){
+		printf("\nError binding socket..");
+	}
 
-        //Set socket to Broadcast
-        var = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &b, sizeof(b));
-        if(var < 0){
-                printf("\nError in setsockopt()");
-        }
-        length = sizeof(struct sockaddr_in);
+	//Set socket to Broadcast
+	var = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &b, sizeof(b));
+	if(var < 0){
+		printf("\nError in setsockopt()");
+	}
+	length = sizeof(struct sockaddr_in);
 
 	var = sendto(sock, "TEST", strlen("TEST"), 0, (struct sockaddr *)&me, length);
 	printf("Write status - %d --- %d\n", var, errno);
@@ -157,6 +171,7 @@ void setup(){
 
 void *receivethread(void *ptr){
 	int var;
+	Event *new;
 
 	while (1){
 		//var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
@@ -170,8 +185,51 @@ void *receivethread(void *ptr){
 			var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
 			//var = write(sock, msg, MSG_SIZE);
 		}
-		
+		else if(msg[0] == '$'){
+			//maloc space for a new node in the list 
+			new = (Event *)malloc(sizeof(Event));		
+
+
+
+		}
+
 
 	}
 
 }
+//This function will add an event to the end of our linked list 
+void add_node(Event *add){
+	//check that the list exists 
+	if(head == NULL){
+		head = add;
+	}
+	else{
+		//create pointer to the head 
+		 Event *ptr = head;
+
+		//while loop to find the end of the linked list 
+		while(ptr->nextevent != NULL){
+			ptr = ptr->nextevent;
+		}
+
+		//when loop breaks we want to add the new node 
+		ptr->nextevent = add;
+		add->nextevent = NULL;
+	}
+}
+
+//function to call when we want to free the list 
+void free_list(Event *node){
+
+	//Base Case 
+	if(node->nextevent == NULL){
+		free(node);	
+	}
+
+	else{
+		free_list(node->nextevent);
+		free(node);
+	}		
+}
+
+

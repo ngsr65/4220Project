@@ -183,7 +183,7 @@ void setup(){
         if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
                 printf("\nCannot open device %s", CHAR_DEV);
         }
-/*
+
 	//Create the socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		printf("\nError creating socket...\n");
@@ -225,11 +225,11 @@ void setup(){
 	}	
 
 	printf("\nMy ID number is %d", myID);
-*/
+
 	//call thread 1 to constantly check for messages from other RTU's
-//	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
-//	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);	
-//	pthread_create(&et, NULL, (void *)eventthread, (void *)&myID);
+	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
+	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);	
+	pthread_create(&et, NULL, (void *)eventthread, (void *)&myID);
 }
 
 void checkSignal(float currentreading, int currentreadingindex, float* pastreadings){
@@ -413,7 +413,7 @@ void *eventthread(void *ptr){
 	param.sched_priority = 55;
 	sched_setscheduler(0, SCHED_FIFO, &param);
 
-	timer_value.it_interval.tv_sec = 1;
+	timer_value.it_interval.tv_sec = 5;
 	timer_value.it_interval.tv_nsec = 0;
 	timer_value.it_value.tv_sec = 0;
 	timer_value.it_value.tv_nsec = 100;
@@ -422,7 +422,7 @@ void *eventthread(void *ptr){
 	read(timer, &periods, sizeof(periods));
 
 	while(1){
-
+		printf("\nSending List..");
 		send_list(Head);
 		free_list(Head);
 		Head = (Event *)malloc(sizeof(Event));
@@ -528,7 +528,7 @@ void print_list(Event *node){
 //this function will send the structure through the socket to the historian
 void send_list(Event *node){
 	
-	Event *ptr cnode = node;
+	Event *cnode = node;
 	int var;
 	char emsg[MSG_SIZE];
 
@@ -536,13 +536,13 @@ void send_list(Event *node){
 		cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
 		cnode->timestamp.tv_nsec);
 	while (cnode->nextevent != NULL){
-		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, &length); 
+		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length); 
 		cnode = cnode->nextevent;
 		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%d|%.04f|%ld.%ld", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
 		cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
 		cnode->timestamp.tv_sec);		
 	}
-		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length);
 	
 }
 

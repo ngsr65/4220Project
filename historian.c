@@ -1,6 +1,5 @@
 //Included Libraries
-#include <wiringPi.h>
-#include <wiringPiSPI.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdint.h>
@@ -20,18 +19,17 @@
 #define MSG_SIZE 40
 #define PORT 4000
 
+//Global Variables
+struct sockaddr_in me;
+socklen_t length;
+int sock, connections = 0;
+char msg[MSG_SIZE];
+char *commands[] = {"red LED on", "red LED off", "yellow LED on", "yellow LED off", "green LED on", "green LED off"};
+
 //Function Prototypes
 void setup();
 void sendmessage(char*);
 void *receivethread(void *ptr);
-
-//Global Variables
-struct sockaddr_in me, server;
-socklen_t length;
-int sock, connections = 0;
-char msg[MSG_SIZE];
-
-char *commands[] = {"red LED on", "red LED off", "yellow LED on", "yellow LED off", "blue LED on", "blue LED off"};
 
 
 
@@ -66,8 +64,8 @@ int main(){
 				printf("\nTurn off red LED - 2");
 				printf("\nTurn on yellow LED - 3");
                                 printf("\nTurn off yellow LED - 4");
-				printf("\nTurn on blue LED - 5");
-                                printf("\nTurn off blue LED - 6");
+				printf("\nTurn on green LED - 5");
+                                printf("\nTurn off green LED - 6");
 				printf("\nPlease enter the command: ");
 				scanf("%d", &command);
 
@@ -98,7 +96,7 @@ int main(){
 				printf("\nTelling RTU #%d to turn the %s.", rtu, commands[command - 1]);
 
 				buff[0] = '#';
-				buff[1] = (rtu - 48);	//Single digit int to char conversion
+				buff[1] = rtu + '0';	//Single digit int to char conversion
 
 				//Send the command
 				sendmessage(buff);
@@ -120,13 +118,14 @@ int main(){
 
 void sendmessage(char* msg){
 	int a;
-
+	
+	//a = write(sock, msg, MSG_SIZE);
 	a = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
 }
 
 void setup(){
 	
-	int var, b;
+	int var, b = 1;
 
 	//Create a socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
@@ -134,14 +133,14 @@ void setup(){
 	}
 
 	//Initalize server struct
-	bzero(&server, sizeof(server));
-        server.sin_family = AF_INET;
-        server.sin_addr.s_addr = INADDR_ANY;
-        server.sin_port = htons(PORT);
+	bzero(&me, sizeof(me));
+        me.sin_family = AF_INET;
+        me.sin_addr.s_addr = INADDR_ANY;
+        me.sin_port = htons(PORT);
 	inet_aton("128.206.19.255", &me.sin_addr);
 
 	//Bind Socket 
-        if(bind(sock, (const struct sockaddr *)&server, sizeof(server)) < 0){
+        if(bind(sock, (const struct sockaddr *)&me, sizeof(me)) < 0){
                 printf("\nError binding socket..");
         }
 
@@ -151,19 +150,25 @@ void setup(){
                 printf("\nError in setsockopt()");
         }
         length = sizeof(struct sockaddr_in);
+
+	var = sendto(sock, "TEST", strlen("TEST"), 0, (struct sockaddr *)&me, length);
+	printf("Write status - %d --- %d\n", var, errno);
 }
 
 void *receivethread(void *ptr){
 	int var;
-	char message[MSG_SIZE];
 
 	while (1){
-		var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
-		
-		if (strncmp(message, "WHOIS", 5) == 0){
-			memset(message, '\0', MSG_SIZE);
-			sprintf(message, "~%d", connections++);
-			var = sendto(sock, message, strlen(message), 0, (struct sockaddr *)&me, length);
+		//var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+		var = read(sock, msg, MSG_SIZE);
+		printf("Received: %s\n", msg); 		//Deleteme		
+		if (strncmp(msg, "WHOIS", 5) == 0){
+			printf("Got the WHOIS\n");
+			memset(msg, '\0', MSG_SIZE);
+			sprintf(msg, "~%d", connections++);
+			inet_aton("128.206.19.255", &me.sin_addr);
+			var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
+			//var = write(sock, msg, MSG_SIZE);
 		}
 		
 

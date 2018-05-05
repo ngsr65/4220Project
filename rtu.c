@@ -74,9 +74,10 @@ struct eventvar{
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
-int sock, myID, cdev_id;
+int sock, myID, cdev_id, counter = 0;
 Event* Head;
 pthread_t t1, cdev_thread, et;
+float currentreading;
 
 //Function Prototypes 
 void segementDisplay(int number);
@@ -92,19 +93,20 @@ void event(enum eventtypes t);
 void add_node(Event *add);
 void free_list(Event *node);
 void print_list(Event *node);
+void send_list(Event *node);
 
 int main(){
 	
 	//Variables
 	int i, b, var, otherRTU = -1;
 	int signalindex = 0; //For checking signal is active
-	float pastreadings[10] = {0}, currentreading;
+	float pastreadings[10] = {0};
 	struct timespec start, current;
 	char msg[MSG_SIZE];
 	
 	//Run setup operations
 	setup();
-	
+
 	//Main program loop
 	while (1){
 
@@ -119,13 +121,14 @@ int main(){
 		}
 
 		//Check the signal
-		checkSignal(currentreading, signalindex, pastreadings);
+		checkSignal(currentreading, signalindex, pastreadings);	
 	}	
 	
 	pthread_join(t1, NULL);
 	pthread_join(cdev_thread, NULL);
 	pthread_join(et, NULL);
 
+	return 0;
 }
 
 void event(enum eventtypes t){
@@ -146,12 +149,13 @@ void event(enum eventtypes t){
 	newevent->sw2 = getPinStatus(SW2);
 	newevent->pb4 = getPinStatus(PB4);
 	newevent->pb5 = getPinStatus(PB5);
+	newevent->voltage = currentreading;
 	newevent->nextevent = NULL;
-	clock_gettime(CLOCK_MONOTONIC, &(newevent->timestamp));
+	clock_gettime(CLOCK_REALTIME, &(newevent->timestamp));
 
 	//Add new event to the linked list 
+	counter++;
 	add_node(newevent);
-	printf("\nNode Added to list...");
 //	print_list(Head);
 }
 
@@ -179,7 +183,7 @@ void setup(){
         if((cdev_id = open(CHAR_DEV, O_RDWR)) == -1){
                 printf("\nCannot open device %s", CHAR_DEV);
         }
-
+/*
 	//Create the socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		printf("\nError creating socket...\n");
@@ -221,11 +225,10 @@ void setup(){
 	}	
 
 	printf("\nMy ID number is %d", myID);
-
+*/
 	//call thread 1 to constantly check for messages from other RTU's
-//	pthread_t t1, cdev_thread;
-	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
-	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);	
+//	pthread_create(&cdev_thread, NULL, (void *)readKM, (void *)&myID);
+//	pthread_create(&t1, NULL, (void *)thread1, (void *)&myID);	
 //	pthread_create(&et, NULL, (void *)eventthread, (void *)&myID);
 }
 
@@ -419,13 +422,14 @@ void *eventthread(void *ptr){
 	read(timer, &periods, sizeof(periods));
 
 	while(1){
-		
-	//	print_list(Head);	
-//		free_list(Head->nextevent);
-	//	Head->type = START;
-	
+
+		send_list(Head);
+		free_list(Head);
+		Head = (Event *)malloc(sizeof(Event));
+		Head->type = START;
+		Head->nextevent = NULL;
 		read(timer, &periods, sizeof(periods));
-		
+		usleep(100);	
 	}
 	
 	pthread_exit(0);
@@ -437,7 +441,7 @@ void *readKM(void *ptr){
 	char readin[MSG_SIZE], prev;
 	int dummy;
 	enum eventtypes x;
-	printf("\nReading in from KErnel Module...");
+	printf("\nReading in from Kernel Module...");
 
 	while(1){
 		memset(readin, '\0', MSG_SIZE);
@@ -447,25 +451,26 @@ void *readKM(void *ptr){
 		if(dummy != sizeof(readin)){
 			printf("\nReading in From character Device Failed...");
 		}
+		
 		switch(readin[0]){
 			//button 4 event detected 
 			case '1':
-				printf("\nButton four event detected");
+				//printf("\nButton four event detected");
 				event(pb4);
 				break;
 			//button 5 event detected 
 			case '2':
-				printf("\nButton 5 event detected");
+				//printf("\nButton 5 event detected");
 				event(pb5);
 				break;
 			//switch 1 event detected 
 			case '3':
-				printf("\nSwitch 1 event detected");
+				//printf("\nSwitch 1 event detected");
 				event(sw1);
 				break;
 			//switch 2 event detected 
 			case '4':
-				printf("\nSwitch 2 event detected");
+				//printf("\nSwitch 2 event detected");
 				event(sw2);
 				break;
 			case '\0':
@@ -479,6 +484,7 @@ void *readKM(void *ptr){
 
 	pthread_exit(0);
 }
+
 //This function will add an event to the end of our linked list 
 void add_node(Event *add){
 	//create pointer to the head 
@@ -493,6 +499,7 @@ void add_node(Event *add){
 	ptr->nextevent = add;
 	add->nextevent = NULL;
 }
+
 //function to call when we want to free the list 
 void free_list(Event *node){
 	
@@ -509,12 +516,34 @@ void free_list(Event *node){
 
 void print_list(Event *node){
 	Event *ptr = node;
-
-	while(node != NULL){
-		printf("\nEvent #%d on RTU #%d at time %ld.%ld", node->type, node->rtuID, node->timestamp.tv_sec, node->timestamp.tv_nsec);
-		printf("Pin Status:\nRED LED: %d\nYELLOW LED: %d\nGREEN LED: %d\nSWITCH 1:%d\n", node->led1, node->led2, node->led3, node->sw1);
-		printf("SWITCH 2: %d\nPB4: %d\nPB5: %d\n", node->sw2, node->pb4, node->pb5);
+	
+	while(ptr->nextevent != NULL){
+		printf("\nEvent #%d on RTU #%d at time %ld.%ld", ptr->type, ptr->rtuID, ptr->timestamp.tv_sec, ptr->timestamp.tv_nsec);
+		printf("Pin Status:\nRED LED: %d\nYELLOW LED: %d\nGREEN LED: %d\nSWITCH 1:%d\n", ptr->led1, ptr->led2, ptr->led3, ptr->sw1);
+		printf("SWITCH 2: %d\nPB4: %d\nPB5: %d\n", ptr->sw2, ptr->pb4, ptr->pb5);
 		ptr = ptr->nextevent;
 	}
-
 }
+
+//this function will send the structure through the socket to the historian
+void send_list(Event *node){
+	
+	Event *ptr cnode = node;
+	int var;
+	char emsg[MSG_SIZE];
+
+	sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%d|%.04f|%ld.%ld", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
+		cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
+		cnode->timestamp.tv_nsec);
+	while (cnode->nextevent != NULL){
+		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, &length); 
+		cnode = cnode->nextevent;
+		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%d|%.04f|%ld.%ld", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
+		cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
+		cnode->timestamp.tv_sec);		
+	}
+		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
+	
+}
+
+

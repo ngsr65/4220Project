@@ -80,7 +80,7 @@ pthread_t t1, cdev_thread, et;
 float currentreading;
 
 //Function Prototypes 
-void segementDisplay(int number);
+void segmentDisplay(int number);
 float getADC();
 void setLED(int number, int onoff);
 int getPinStatus(int number);
@@ -98,7 +98,7 @@ void send_list(Event *node);
 int main(){
 
 	//Variables
-	int i, b, var, otherRTU = -1;
+	int i, b, var;
 	int signalindex = 0; //For checking signal is active
 	float pastreadings[10] = {0};
 	struct timespec start, current;
@@ -121,7 +121,7 @@ int main(){
 		}
 
 		//Check the signal
-		checkSignal(currentreading, signalindex, pastreadings);	
+		//checkSignal(currentreading, signalindex, pastreadings);	
 	}	
 
 	pthread_join(t1, NULL);
@@ -149,9 +149,16 @@ void event(enum eventtypes t){
 	newevent->nextevent = NULL;
 	clock_gettime(CLOCK_REALTIME, &(newevent->timestamp));
 
+	//Show on the display what event just happened
+        if ((int)t < 10){
+                segmentDisplay((int)t);
+        }
+
+
 	//Add new event to the linked list 
 	counter++;
 	add_node(newevent);
+
 	//	print_list(Head);
 }
 
@@ -301,6 +308,8 @@ float getADC(){
 void segmentDisplay(int number){
 	int a = 0, b = 0, c = 0, d = 0;
 
+	digitalWrite(SegENABLE, 1);
+
 	switch (number){
 		case 1:
 			a = 1;
@@ -334,10 +343,12 @@ void segmentDisplay(int number){
 		case 9:
 			a = 1;
 			d = 1;
-			break;		
+			break;	
+		case 10:
+			digitalWrite(SegENABLE, 0);
+			break;	
 	}	
 
-	digitalWrite(SegENABLE, 1);
 	digitalWrite(SegA, 0);
 	digitalWrite(SegB, 0);
 	digitalWrite(SegC, 1);
@@ -482,8 +493,7 @@ void add_node(Event *add){
 	if(Head == NULL){
 		Head = add;
 
-	}
-	else {
+	} else {
 		//create pointer to the head 
 		Event *ptr = Head;
 
@@ -501,14 +511,39 @@ void add_node(Event *add){
 //function to call when we want to free the list 
 void free_list(Event *node){
 
-	//Base Case 
-	if(node->nextevent == NULL){
-		free(node);	
-	}
+	Event *oldnode, *head = node, *cnode;
 
-	else{
-		free_list(node->nextevent);
-		free(node);
+	//Base Case 
+	//if (node == NULL){
+	//	return;
+	//}
+
+	//if(node->nextevent == NULL){
+	//	free(node);	
+	//} else{
+	//	free_list(node->nextevent);
+	//	free(node);
+	//}
+
+	if (head == NULL){
+		return;
+		printf("\nHead is NULL, exiting\n\n");
+	} else {
+		while (head->nextevent != NULL){
+			cnode = head;
+			oldnode = cnode;
+			while (cnode->nextevent != NULL){
+				oldnode = cnode;
+				cnode = cnode->nextevent;
+			}
+
+			if (oldnode != cnode){
+				oldnode->nextevent = NULL;
+			} else {
+				head->nextevent = NULL;
+			}
+			free(cnode);
+		}
 	}		
 }
 
@@ -529,20 +564,28 @@ void send_list(Event *node){
 	Event *cnode = node;
 	int var;
 	char emsg[MSG_SIZE];
+	struct timespec ctime;
 
 	if(node != NULL){
-		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%d|%.04f|%ld.%ld", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
+		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
 				cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
 				cnode->timestamp.tv_nsec);
 		printf("\n%s", emsg);
 		while (cnode->nextevent != NULL){
 			var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length); 
 			cnode = cnode->nextevent;
-			sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%d|%.04f|%ld.%ld", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
+			sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
 					cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
 					cnode->timestamp.tv_nsec);		
 		}
 		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length);
+	} else {
+		clock_gettime(CLOCK_REALTIME, &ctime);
+		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", myID, getPinStatus(REDLED), getPinStatus(YELLOWLED), getPinStatus(GREENLED),
+                                getPinStatus(SW1), getPinStatus(SW2), getPinStatus(PB4), getPinStatus(PB5), 10, getADC(), ctime.tv_sec, ctime.tv_nsec);
+		printf("\nNo events - %s\n", emsg);
+		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length);
+		segmentDisplay(10);
 	}
 }
 

@@ -20,7 +20,7 @@
 #define PORT 4000
 
 //Event enum
-enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5};
+enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5, noevent};
 
 //Event struct
 struct eventvar{
@@ -67,7 +67,8 @@ int main(){
 		printf("\nExit - 0");
 		printf("\nPlease enter a command: ");
 		scanf("%d", &option);
-
+		fflush(stdin);		
+		
 		switch (option){
 			case 0:
 				running = 0;
@@ -126,7 +127,7 @@ int main(){
 
 
 
-
+	printf("\nEnding program");
 	return 0;
 }
 
@@ -197,18 +198,15 @@ void *receivethread(void *ptr){
 			new->sw2 = msg[7] - '0';
 			new->pb4 = msg[8] - '0';
 			new->pb5 = msg[9] - '0';		
-			new->type = msg[10] - '0';	
-		
-			char volt[6];
-			*volt = *(msg + 12);
-			new->voltage = atof(volt);
-			new->time = atof(msg + 19);
-			printf("\n");
+			new->type = atoi(msg +11);	
+			new->voltage = atof(msg + 12);
+			new->time = atoi(msg + 21);
+			new->time = new->time * 100000000;
+			new->time = new->time + atoi(msg +32);
+			//add the new node to the list 
+			add_node(new);
 		}
-
-
 	}
-
 }
 //This function will add an event to the end of our linked list 
 void add_node(Event *add){
@@ -221,7 +219,7 @@ void add_node(Event *add){
 		 Event *ptr = head;
 
 		//while loop to find the end of the linked list 
-		while(ptr->nextevent != NULL){
+		while(ptr->nextevent != NULL ){//| ptr->time < add->time){
 			ptr = ptr->nextevent;
 		}
 

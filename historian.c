@@ -20,7 +20,7 @@
 #define PORT 4000
 
 //Event enum
-enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5, START};
+enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5};
 
 //Event struct
 struct eventvar{
@@ -28,6 +28,7 @@ struct eventvar{
 	enum eventtypes type;
 	float voltage;
 	struct timespec timestamp;
+	uint64_t time;
 	struct eventvar *nextevent;
 }typedef Event;
 
@@ -186,11 +187,23 @@ void *receivethread(void *ptr){
 			//var = write(sock, msg, MSG_SIZE);
 		}
 		else if(msg[0] == '$'){
-			//maloc space for a new node in the list 
+			//malloc space for a new node in the list 
 			new = (Event *)malloc(sizeof(Event));		
-
-
-
+			new->rtuID = msg[1] - '0';
+			new->led1 = msg[3] - '0';
+			new->led2 = msg[4] - '0';
+			new->led3 = msg[5] - '0';
+			new->sw1 = msg[6] - '0';
+			new->sw2 = msg[7] - '0';
+			new->pb4 = msg[8] - '0';
+			new->pb5 = msg[9] - '0';		
+			new->type = msg[10] - '0';	
+		
+			char volt[6];
+			*volt = *(msg + 12);
+			new->voltage = atof(volt);
+			new->time = atof(msg + 19);
+			printf("\n");
 		}
 
 
@@ -232,4 +245,14 @@ void free_list(Event *node){
 	}		
 }
 
+void print_list(Event *node){
+        Event *ptr = node;
+
+        while(ptr != NULL){
+                printf("\nEvent #%d on RTU #%d at time %ld.%ld", ptr->type, ptr->rtuID, ptr->timestamp.tv_sec, ptr->timestamp.tv_nsec);
+                printf("Pin Status:\nRED LED: %d\nYELLOW LED: %d\nGREEN LED: %d\nSWITCH 1:%d\n", ptr->led1, ptr->led2, ptr->led3, ptr->sw1);
+                printf("SWITCH 2: %d\nPB4: %d\nPB5: %d\n", ptr->sw2, ptr->pb4, ptr->pb5);
+                ptr = ptr->nextevent;
+        }
+}
 

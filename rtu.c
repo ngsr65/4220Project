@@ -139,7 +139,7 @@ void event(enum eventtypes t){
 	//Increment the counter
 	counter++;
 
-	printf("Counter is now %d\n", counter);
+	//printf("Counter is now %d\n", counter);
 }
 
 void setup(){
@@ -149,7 +149,7 @@ void setup(){
 
 	//Initialize Wiring Pi and the SPI Bus
 	wiringPiSetupGpio();
-	wiringPiSPISetup(0, 100000);
+	wiringPiSPISetup(0, 1000000);
 
 
 	//7 Segment Display Setup

@@ -35,10 +35,11 @@ struct eventvar{
 //Global Variables
 struct sockaddr_in me;
 socklen_t length;
-int sock, connections = 0;
+int sock, connections = 0, file_write = 41;
 char msg[MSG_SIZE];
 char *commands[] = {"red LED on", "red LED off", "yellow LED on", "yellow LED off", "green LED on", "green LED off"};
 Event *head;
+FILE *fPtr;
 
 //Function Prototypes
 void setup();
@@ -46,7 +47,6 @@ void sendmessage(char*);
 void *receivethread(void *ptr);
 void add_node(Event *add);
 void free_list(Event *node);
-
 
 int main(){
 
@@ -119,6 +119,9 @@ int main(){
 
 
 				break;
+			case 2:
+				file_write = 0;
+				break;
 			default:
 				printf("\nError, invalid option!");
 		}
@@ -142,6 +145,11 @@ void sendmessage(char* msg){
 void setup(){
 
 	int var, b = 1;
+
+	fPtr = fopen("output.txt", "w");
+	if(fPtr == NULL){
+		printf("\nThe file output.txt could not be opened please try again..");
+	}
 
 	//Create a socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
@@ -205,6 +213,12 @@ void *receivethread(void *ptr){
 			new->time = new->time + atoi(msg +32);
 			//add the new node to the list 
 			add_node(new);
+
+			if(file_write < 40){
+				fprintf(fPtr, "\n%.04f	%ld", new->voltage, new->time);
+				file_write++;
+			}
+
 		}
 	}
 }
@@ -213,6 +227,7 @@ void add_node(Event *add){
 	//check that the list exists 
 	if(head == NULL){
 		head = add;
+		head->nextevent = NULL;
 	}
 	else{
 		//create pointer to the head 
@@ -253,4 +268,3 @@ void print_list(Event *node){
                 ptr = ptr->nextevent;
         }
 }
-

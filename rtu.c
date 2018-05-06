@@ -39,7 +39,7 @@ Tells RTU with ID 1 to turn on it's Red LED
 #include <time.h>
 #include <sys/timerfd.h>
 #include <sched.h>
-
+#include <errno.h>
 
 //Definitions
 #define REDLED 	  2
@@ -60,7 +60,7 @@ Tells RTU with ID 1 to turn on it's Red LED
 #define CHAR_DEV "/dev/buffer"
 
 //Event enum
-enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5};
+enum eventtypes{sigoff, sighigh, siglow, led1, led2, led3, sw1, sw2, pb4, pb5, noevent};
 
 //Event struct
 struct eventvar{
@@ -74,10 +74,12 @@ struct eventvar{
 //Global Variables
 struct sockaddr_in me, server;
 socklen_t length;
-int sock, myID, cdev_id, counter = 0;
+int sock, myID, cdev_id, counter = 0, sigoffflag = 0, sighighflag = 0, siglowflag = 0;
 Event* Head = NULL;
 pthread_t t1, cdev_thread, et;
 float currentreading;
+char data[1600];
+
 
 //Function Prototypes 
 void segmentDisplay(int number);
@@ -93,16 +95,16 @@ void event(enum eventtypes t);
 void add_node(Event *add);
 void free_list(Event *node);
 void print_list(Event *node);
-void send_list(Event *node);
+void send_list();
 
 int main(){
 
 	//Variables
 	int i, b, var;
 	int signalindex = 0; //For checking signal is active
-	float pastreadings[10] = {0};
 	struct timespec start, current;
 	char msg[MSG_SIZE];
+	float pastreadings[10] = {0};
 
 	//Run setup operations
 	setup();
@@ -113,15 +115,15 @@ int main(){
 		currentreading = getADC();
 
 		//Load current signal value into signalcheck array
-		pastreadings[signalindex] = currentreading;
-		if (signalindex == 9){
-			signalindex = 0;
-		} else {
-			signalindex++;
-		}
+		//pastreadings[signalindex] = currentreading;
+		//if (signalindex == 9){
+		//	signalindex = 0;
+		//} else {
+		//	signalindex++;
+		//}
 
 		//Check the signal
-		//checkSignal(currentreading, signalindex, pastreadings);	
+		checkSignal(currentreading, signalindex, pastreadings);	
 	}	
 
 	pthread_join(t1, NULL);
@@ -132,7 +134,7 @@ int main(){
 }
 
 void event(enum eventtypes t){
-	Event* newevent;
+	/*Event* newevent;
 
 	newevent = (Event*)malloc(sizeof(Event));
 
@@ -148,16 +150,26 @@ void event(enum eventtypes t){
 	newevent->voltage = currentreading;
 	newevent->nextevent = NULL;
 	clock_gettime(CLOCK_REALTIME, &(newevent->timestamp));
-
+	*/
 	//Show on the display what event just happened
+
+	struct timespec ctime;
+	clock_gettime(CLOCK_REALTIME, &ctime);
+
+	printf("\nEvent %d just occured!\n", (int)t);
+
         if ((int)t < 10){
                 segmentDisplay((int)t);
         }
 
 
 	//Add new event to the linked list 
+	snprintf(data + (counter * 40), 40, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", myID, getPinStatus(REDLED), getPinStatus(YELLOWLED), getPinStatus(GREENLED), getPinStatus(SW1), getPinStatus(SW2), getPinStatus(PB4), getPinStatus(PB5), (int)t, getADC(), ctime.tv_sec, ctime.tv_nsec);
+	//printf("\nEvent - %s\n", *(data + counter));
 	counter++;
-	add_node(newevent);
+	printf("Counter is now %d\n", counter);
+
+	//add_node(newevent);
 
 	//	print_list(Head);
 }
@@ -167,9 +179,11 @@ void setup(){
 	char msg[MSG_SIZE];
 	int b, var, otherRTU;
 
+	//memset(data, 0, 1600);
+
 	//Initialize Wiring Pi and the SPI Bus
 	wiringPiSetupGpio();
-	wiringPiSPISetup(0, 1000000);
+	wiringPiSPISetup(0, 100000);
 
 
 	//7 Segment Display Setup
@@ -238,26 +252,51 @@ void checkSignal(float currentreading, int currentreadingindex, float* pastreadi
 
 	//Check for no power
 	//Make sure the compare value is 5 readings away
-	i = currentreadingindex;
-	if (i < 5){
-		i = 4 + i;
-	} else {
-		i = currentreadingindex - 5;
-	}
+	//i = currentreadingindex;
+	//if (i < 5){
+	//	i = 4 + i;
+	//} else {
+	//	i = currentreadingindex - 5;
+	//}
 
 	//Check to see if an older signal is within 2% of new signal
-	if (((pastreadings[currentreadingindex]) > 0.99 * (pastreadings[i])) && 
-			((pastreadings[currentreadingindex]) < 1.01 * (pastreadings[i]))){
-		event(sigoff);
+	//if (((pastreadings[currentreadingindex]) > 0.99 * (pastreadings[i])) && 
+	//		((pastreadings[currentreadingindex]) < 1.01 * (pastreadings[i]))){
+	if (currentreading < 0.1){
+		if (sigoffflag == 0){
+			event(sigoff);
+			sigoffflag = 1;
+		}
+	} else {
+		if (sigoffflag == 1){
+			event(sigoff);
+			sigoffflag = 0;
+		}
 	}
 
 	//Check for out of bounds
 	if (currentreading > 2.0){
-		event(sighigh);
+		if (sighighflag == 0){
+			event(sighigh);
+			sighighflag = 1;
+		}
+	} else {
+		if (sighighflag == 1){
+			sighighflag = 0;
+			event(sighigh);
+		}
 	}
 
 	if (currentreading < 1.0){
-		event(siglow);
+		if (siglowflag == 0){
+			event(siglow);
+			siglowflag = 1;	
+		}
+	} else {
+		if (siglowflag == 1){
+			siglowflag = 0;
+			event(siglow);
+		}
 	}
 }
 
@@ -284,23 +323,23 @@ int getPinStatus(int number){
 float getADC(){
 
 	uint16_t received = 0;
-	uint8_t data[3] = {
+	uint8_t data2[3] = {
 		0x01,	//Start Byte
 		0xA0,	//Channel 2
 		0x00    //Empty Byte
 	};
 
 	//Send and recieve data over the SPI bus
-	wiringPiSPIDataRW(0, data, 3);
+	wiringPiSPIDataRW(0, data2, 3);
 
 	//00000000 000000XX
-	received = data[1];
+	received = data2[1];
 
 	//000000XX 00000000
 	received = received << 8;
 
 	//000000XX XXXXXXXX
-	received = received | data[2];
+	received = received | data2[2];
 
 	return ((float)(received * 3.3) / 1023);
 }
@@ -349,10 +388,10 @@ void segmentDisplay(int number){
 			break;	
 	}	
 
-	digitalWrite(SegA, 0);
-	digitalWrite(SegB, 0);
-	digitalWrite(SegC, 1);
-	digitalWrite(SegD, 0);
+	digitalWrite(SegA, a);
+	digitalWrite(SegB, b);
+	digitalWrite(SegC, c);
+	digitalWrite(SegD, d);
 }
 
 void *thread1(void *ptr){
@@ -362,7 +401,7 @@ void *thread1(void *ptr){
 	while(1){
 		memset(message,'\0', 40);			
 		var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&server, &length);
-		printf("\nMessage Recieved: %s", message);
+		//printf("\nMessage Recieved: %s", message);
 
 		//check if message was recieved properly 	
 		;		if (var < 0){					
@@ -418,9 +457,9 @@ void *eventthread(void *ptr){
 	param.sched_priority = 55;
 	sched_setscheduler(0, SCHED_FIFO, &param);
 
-	timer_value.it_interval.tv_sec = 5;
+	timer_value.it_interval.tv_sec = 4;
 	timer_value.it_interval.tv_nsec = 0;
-	timer_value.it_value.tv_sec = 0;
+	timer_value.it_value.tv_sec = 2;
 	timer_value.it_value.tv_nsec = 100;
 
 	timerfd_settime(timer, 0, &timer_value, NULL);
@@ -428,8 +467,33 @@ void *eventthread(void *ptr){
 
 	while(1){
 		printf("\nSending List..");
-		send_list(Head);
-		free_list(Head);
+		if (counter == 0){
+			event(noevent);
+		}
+		//send_list(Head);
+		//send_list();
+		
+		int i2, var;
+
+        	for (i2 = 0; i2 < counter; i2++){
+
+                var = sendto(sock, data + (counter * 40), MSG_SIZE, 0, (struct sockaddr *)&me, length);
+                printf("Sent %s\n", data + (counter * 40));
+                if (var != 40){
+                        printf("Error sending! Var - %d Errno - %d\n", var, errno);
+                }
+        	}
+
+
+		//printf("\nJust sent list\n");
+		//printf("\nFreeing\n");
+
+		//free_list(Head);
+		//memset(data, 0, sizeof(data[0][0]) * 1600);
+		counter = 0;
+		//Head = NULL;
+		//printf("Freed\n");
+
 		read(timer, &periods, sizeof(periods));
 		usleep(100);	
 	}
@@ -492,6 +556,7 @@ void add_node(Event *add){
 
 	if(Head == NULL){
 		Head = add;
+		Head->nextevent = NULL;
 
 	} else {
 		//create pointer to the head 
@@ -511,40 +576,20 @@ void add_node(Event *add){
 //function to call when we want to free the list 
 void free_list(Event *node){
 
-	Event *oldnode, *head = node, *cnode;
-
-	//Base Case 
-	//if (node == NULL){
-	//	return;
-	//}
-
-	//if(node->nextevent == NULL){
-	//	free(node);	
-	//} else{
+	//if (node != NULL){
 	//	free_list(node->nextevent);
 	//	free(node);
 	//}
 
-	if (head == NULL){
-		return;
-		printf("\nHead is NULL, exiting\n\n");
-	} else {
-		while (head->nextevent != NULL){
-			cnode = head;
-			oldnode = cnode;
-			while (cnode->nextevent != NULL){
-				oldnode = cnode;
-				cnode = cnode->nextevent;
-			}
+	//node = NULL;		
 
-			if (oldnode != cnode){
-				oldnode->nextevent = NULL;
-			} else {
-				head->nextevent = NULL;
-			}
-			free(cnode);
-		}
-	}		
+	while (node){
+		Event *next = node->nextevent;
+		free(node);
+		printf("\nFreed\n");
+		node = next;
+	}
+
 }
 
 void print_list(Event *node){
@@ -559,34 +604,56 @@ void print_list(Event *node){
 }
 
 //this function will send the structure through the socket to the historian
-void send_list(Event *node){
+void send_list(){
 
+
+	int i2, var;
+
+	for (i2 = 0; i2 < counter; i2++){
+
+		//var = sendto(sock, *(data + counter), MSG_SIZE, 0, (struct sockaddr *)&me, length);
+		//printf("Sent %s\n", *(data + counter));
+		if (var != 40){
+			printf("Error sending! Var - %d	Errno - %d\n", var, errno);
+		}
+	}
+
+
+	/*
 	Event *cnode = node;
-	int var;
+	int var, i = 0;
 	char emsg[MSG_SIZE];
 	struct timespec ctime;
 
-	if(node != NULL){
-		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
+	if (node == NULL){
+		printf("We got a bad errror\n");
+	}
+
+	//if(node != NULL){
+		bzero(emsg, 40);
+		snprintf(emsg, 40, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld", myID, cnode->led1, cnode->led2, cnode->led3,
 				cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
 				cnode->timestamp.tv_nsec);
-		printf("\n%s", emsg);
+		printf("\n%d \"%s\"",i++, emsg);
 		while (cnode->nextevent != NULL){
 			var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length); 
 			cnode = cnode->nextevent;
-			sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", cnode->rtuID, cnode->led1, cnode->led2, cnode->led3,
-					cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
-					cnode->timestamp.tv_nsec);		
+			bzero(emsg, 40);
+			snprintf(emsg, 40, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld", myID, cnode->led1, cnode->led2, cnode->led3,
+                                cnode->sw1, cnode->sw2, cnode->pb4, cnode->pb5, cnode->type, cnode->voltage, cnode->timestamp.tv_sec,
+                                cnode->timestamp.tv_nsec);	
+			printf("\n%d \"%s\"",i++, emsg);
 		}
 		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length);
-	} else {
+	*/
+	/*} else {
 		clock_gettime(CLOCK_REALTIME, &ctime);
 		sprintf(emsg, "$%d|%d%d%d%d%d%d%d|%02d|%.04f|%ld.%ld ", myID, getPinStatus(REDLED), getPinStatus(YELLOWLED), getPinStatus(GREENLED),
                                 getPinStatus(SW1), getPinStatus(SW2), getPinStatus(PB4), getPinStatus(PB5), 10, getADC(), ctime.tv_sec, ctime.tv_nsec);
 		printf("\nNo events - %s\n", emsg);
 		var = sendto(sock, emsg, MSG_SIZE, 0, (struct sockaddr *)&me, length);
 		segmentDisplay(10);
-	}
+	}*/
 }
 
 

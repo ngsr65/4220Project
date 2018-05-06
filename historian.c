@@ -35,7 +35,7 @@ struct eventvar{
 //Global Variables
 struct sockaddr_in me;
 socklen_t length;
-int sock, connections = 0, file_write = 41;
+int sock, connections = 0, file_write = 81;
 char msg[MSG_SIZE];
 char *commands[] = {"red LED on", "red LED off", "yellow LED on", "yellow LED off", "green LED on", "green LED off"};
 Event *head;
@@ -63,8 +63,8 @@ int main(){
 
 	while(running == 1){
 
-		printf("\nFile Output - 2");
 		printf("\nChange an LED - 1");
+		printf("\nFile Output - 2");
 		printf("\nExit - 0");
 		printf("\nPlease enter a command: ");
 		scanf("%d", &option);
@@ -143,7 +143,6 @@ int main(){
 void sendmessage(char* msg){
 	int a;
 
-	//a = write(sock, msg, MSG_SIZE);
 	a = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
 }
 
@@ -175,8 +174,7 @@ void setup(){
 	}
 	length = sizeof(struct sockaddr_in);
 
-//	var = sendto(sock, "TEST", strlen("TEST"), 0, (struct sockaddr *)&me, length);
-//	printf("Write status - %d --- %d\n", var, errno);
+
 }
 
 void *receivethread(void *ptr){
@@ -185,15 +183,13 @@ void *receivethread(void *ptr){
 
 	while (1){
 		//var = recvfrom(sock, message, MSG_SIZE, 0, (struct sockaddr *)&me, &length);
-		var = read(sock, msg, MSG_SIZE);
-		printf("Received: %s\n", msg); 		//Deleteme		
+		var = read(sock, msg, MSG_SIZE);		
 		if (strncmp(msg, "WHOIS", 5) == 0){
 			printf("Got the WHOIS\n");
 			memset(msg, '\0', MSG_SIZE);
 			sprintf(msg, "~%d", connections++);
 			inet_aton("128.206.19.255", &me.sin_addr);
 			var = sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&me, length);
-			//var = write(sock, msg, MSG_SIZE);
 		}
 		else if(msg[0] == '$'){
 			//malloc space for a new node in the list 
@@ -222,12 +218,12 @@ void *receivethread(void *ptr){
 			add_node(new);
 
 			//check for the file writing flag 
-			if(file_write < 40){
-				printf("\nWriting to file %d: %.04f	%ld\n", file_write, new->voltage, new->time);
+			if(file_write < 80){
 				fprintf(fPtr, "\n%.04f	%ld", new->voltage, new->time);
 				file_write++;
-				if(file_write >= 40){
+				if(file_write >= 80){
 					fclose(fPtr);	
+					printf("Done writing to file\n");
 				}
 			}
 

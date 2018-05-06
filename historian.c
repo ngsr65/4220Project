@@ -63,6 +63,7 @@ int main(){
 
 	while(running == 1){
 
+		printf("\nFile Output - 2");
 		printf("\nChange an LED - 1");
 		printf("\nExit - 0");
 		printf("\nPlease enter a command: ");
@@ -120,6 +121,10 @@ int main(){
 
 				break;
 			case 2:
+				fPtr = fopen("output.txt", "w");
+        			if(fPtr == NULL){
+                			printf("\nThe file output.txt could not be opened please try again..");
+        			}
 				file_write = 0;
 				break;
 			default:
@@ -128,8 +133,8 @@ int main(){
 
 	}
 
-
-
+		
+	free_list(head);
 	printf("\nEnding program");
 	return 0;
 }
@@ -145,11 +150,6 @@ void sendmessage(char* msg){
 void setup(){
 
 	int var, b = 1;
-
-	fPtr = fopen("output.txt", "w");
-	if(fPtr == NULL){
-		printf("\nThe file output.txt could not be opened please try again..");
-	}
 
 	//Create a socket
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
@@ -175,8 +175,8 @@ void setup(){
 	}
 	length = sizeof(struct sockaddr_in);
 
-	var = sendto(sock, "TEST", strlen("TEST"), 0, (struct sockaddr *)&me, length);
-	printf("Write status - %d --- %d\n", var, errno);
+//	var = sendto(sock, "TEST", strlen("TEST"), 0, (struct sockaddr *)&me, length);
+//	printf("Write status - %d --- %d\n", var, errno);
 }
 
 void *receivethread(void *ptr){
@@ -198,25 +198,37 @@ void *receivethread(void *ptr){
 		else if(msg[0] == '$'){
 			//malloc space for a new node in the list 
 			new = (Event *)malloc(sizeof(Event));		
+			//the first element corresponds to the RTU ID
 			new->rtuID = msg[1] - '0';
+			//the next sevent elements correspond to the status if the LED's, buttons and switches 
 			new->led1 = msg[3] - '0';
 			new->led2 = msg[4] - '0';
 			new->led3 = msg[5] - '0';
 			new->sw1 = msg[6] - '0';
 			new->sw2 = msg[7] - '0';
 			new->pb4 = msg[8] - '0';
-			new->pb5 = msg[9] - '0';		
+			new->pb5 = msg[9] - '0';
+			//the eleventh element is the type number in the enum 		
 			new->type = atoi(msg +11);	
-			new->voltage = atof(msg + 12);
+			//then get the voltage as a float number 
+			new->voltage = atof(msg + 14);
+			//first get the seconds 
 			new->time = atoi(msg + 21);
+			//multiply it by 10^8 
 			new->time = new->time * 100000000;
+			//add the 8 decimal places of nanoseconds 
 			new->time = new->time + atoi(msg +32);
 			//add the new node to the list 
 			add_node(new);
 
+			//check for the file writing flag 
 			if(file_write < 40){
+				printf("\nWriting to file %d: %.04f	%ld\n", file_write, new->voltage, new->time);
 				fprintf(fPtr, "\n%.04f	%ld", new->voltage, new->time);
 				file_write++;
+				if(file_write >= 40){
+					fclose(fPtr);	
+				}
 			}
 
 		}
